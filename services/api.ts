@@ -11,7 +11,8 @@ const mapExerciseFromDB = (data: any): ExerciseDefinition => ({
   targetMuscle: data.target_muscle,
   equipment: data.equipment,
   level: data.level,
-  imageUrl: data.image || `https://placehold.co/200x200/1e293b/0ea5e9?text=${encodeURIComponent(data.name)}`,
+  // Handle both 'image' and 'image_url' to be safe with schema variations
+  imageUrl: data.image_url || data.image || `https://placehold.co/200x200/1e293b/0ea5e9?text=${encodeURIComponent(data.name)}`,
 });
 
 export const api = {
@@ -27,7 +28,7 @@ export const api = {
     const { data, error } = await supabase.from('exercises').select('*').order('name');
     if (error) {
       console.error('Error fetching exercises:', error.message || error);
-      // Fallback to local constants if API fails (e.g. table missing or network error)
+      // Fallback to local constants if API fails
       return INITIAL_EXERCISES;
     }
     return data.map(mapExerciseFromDB);
@@ -44,12 +45,13 @@ export const api = {
         .select('day_id, title')
         .eq('user_id', user.id);
 
-      // 2. Get Workout Items
+      // 2. Get Workout Items with nested exercise data
+      // Explicitly selecting exercise fields helps ensure data is returned even if standard * join fails
       const { data: items } = await supabase
         .from('workout_items')
         .select(`
           *,
-          exercises (*)
+          exercises:exercise_id (*)
         `)
         .eq('user_id', user.id);
 
@@ -61,17 +63,23 @@ export const api = {
         return {
           ...day,
           title: dbSchedule?.title || day.title,
-          exercises: dayItems.map((item: any) => ({
-            id: item.id,
-            exerciseId: item.exercise_id,
-            name: item.exercises?.name || 'Unknown',
-            target: (item.exercises?.muscle_group === 'abs' ? 'core' : item.exercises?.muscle_group) as MuscleGroup,
-            imageUrl: item.exercises?.image || `https://placehold.co/200x200/1e293b/0ea5e9?text=Ex`,
-            sets: item.sets,
-            reps: item.reps,
-            weight: item.weight,
-            notes: item.notes
-          }))
+          exercises: dayItems.map((item: any) => {
+             // Handle relation data (could be null if exercise was deleted)
+             const exData = item.exercises;
+             const img = exData?.image_url || exData?.image || `https://placehold.co/200x200/1e293b/0ea5e9?text=Ex`;
+             
+             return {
+              id: item.id,
+              exerciseId: item.exercise_id,
+              name: exData?.name || 'Unknown Exercise',
+              target: (exData?.muscle_group === 'abs' ? 'core' : exData?.muscle_group) as MuscleGroup,
+              imageUrl: img,
+              sets: item.sets,
+              reps: item.reps,
+              weight: item.weight,
+              notes: item.notes
+            };
+          })
         };
       });
     } catch (error) {
@@ -143,7 +151,7 @@ export const api = {
     const user = await api.getUser();
     const { data, error } = await supabase
       .from('history_logs')
-      .select(`*, exercises (name)`)
+      .select(`*, exercises:exercise_id (name)`)
       .eq('user_id', user.id)
       .order('date', { ascending: true });
     
