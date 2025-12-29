@@ -20,6 +20,26 @@ export const api = {
     return user;
   },
 
+  // Helper interno para garantir que o exercício existe no banco antes de referenciá-lo
+  ensureExerciseExists: async (exerciseId: string) => {
+    const { data } = await supabase.from('exercises').select('id').eq('id', exerciseId).single();
+    if (!data) {
+      const def = INITIAL_EXERCISES.find(ex => ex.id === exerciseId);
+      if (def) {
+        await supabase.from('exercises').insert({
+          id: def.id,
+          name: def.name,
+          slug: def.slug,
+          muscle_group: def.target === 'core' ? 'abs' : def.target,
+          target_muscle: def.targetMuscle,
+          equipment: def.equipment,
+          image_url: def.imageUrl,
+          level: def.level
+        });
+      }
+    }
+  },
+
   getAllExercises: async (): Promise<ExerciseDefinition[]> => {
     try {
       const { data, error } = await supabase
@@ -106,6 +126,9 @@ export const api = {
   addWorkoutExercise: async (dayId: string, exercise: Omit<WorkoutExercise, 'id'>) => {
     const user = await api.getUser();
     
+    // Garantir que o exercício existe no banco de dados (FOREIGN KEY SAFETY)
+    await api.ensureExerciseExists(exercise.exerciseId);
+    
     const { error } = await supabase.from('workout_items').insert({
       user_id: user.id,
       day_id: dayId,
@@ -117,8 +140,8 @@ export const api = {
     });
     
     if (error) {
-      console.error("Supabase error:", error);
-      throw new Error(error.message || "Erro desconhecido no banco de dados");
+      console.error("Supabase detailed error:", error);
+      throw new Error(error.message || "Erro desconhecido ao inserir item de treino");
     }
   },
 
@@ -142,6 +165,8 @@ export const api = {
 
   logHistory: async (log: Omit<HistoryLog, 'id'>) => {
     const user = await api.getUser();
+    await api.ensureExerciseExists(log.exerciseId);
+    
     const { error } = await supabase.from('history_logs').insert({
       user_id: user.id,
       exercise_id: String(log.exerciseId),

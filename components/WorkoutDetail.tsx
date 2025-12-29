@@ -73,7 +73,9 @@ const WorkoutDetail: React.FC = () => {
       loadData();
     } catch (e: any) {
       console.error("Erro completo ao salvar:", e);
-      alert(`Erro ao salvar: ${e.message || "Verifique a conexão com o banco de dados."}`);
+      // Garante que o erro exibido seja uma string legível
+      const errorMsg = typeof e === 'string' ? e : (e.message || "Erro desconhecido ao salvar exercício.");
+      alert(`Erro ao salvar: ${errorMsg}`);
     }
   };
 
@@ -82,8 +84,9 @@ const WorkoutDetail: React.FC = () => {
     try {
       await api.deleteWorkoutExercise(id);
       loadData();
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      alert(e.message || "Erro ao deletar exercício.");
     }
   };
 
