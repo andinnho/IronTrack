@@ -1,13 +1,41 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
-import { storageService } from '../services/storage';
-import { ExerciseDefinition } from '../types';
+import { api } from '../services/api';
+import { ExerciseDefinition, HistoryLog, CompletionLog } from '../types';
+import { Loader2 } from 'lucide-react';
 
 const ProgressView: React.FC = () => {
   const [selectedExerciseId, setSelectedExerciseId] = useState<string>('');
-  const allExercises = storageService.getAllExercises();
-  const history = storageService.getHistory();
-  const completions = storageService.getCompletions();
+  const [allExercises, setAllExercises] = useState<ExerciseDefinition[]>([]);
+  const [history, setHistory] = useState<HistoryLog[]>([]);
+  const [completions, setCompletions] = useState<CompletionLog[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const [ex, hist, comp] = await Promise.all([
+          api.getAllExercises(),
+          api.getHistory(),
+          api.getCompletions()
+        ]);
+        setAllExercises(ex);
+        setHistory(hist);
+        setCompletions(comp);
+        
+        // Default selection
+        if (ex.length > 0 && !selectedExerciseId) {
+             const exWithHistory = ex.find(e => hist.some(h => h.exerciseId === e.id));
+             setSelectedExerciseId(exWithHistory?.id || ex[0].id);
+        }
+      } catch (e) {
+        console.error("Error loading progress data", e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, []);
 
   // Helper to get exercise data
   const exerciseData = useMemo(() => {
@@ -39,11 +67,7 @@ const ProgressView: React.FC = () => {
       weeks[weekLabel] = 0;
     }
 
-    // Really naive week bucketing for demo purposes
-    // In production, use date-fns `getWeek`
     completions.forEach(log => {
-      // Just mock distributing them for visual effect if date logic is complex without library
-      // Let's count total recent workouts
       const date = new Date(log.date);
       const diffTime = Math.abs(now.getTime() - date.getTime());
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
@@ -57,11 +81,12 @@ const ProgressView: React.FC = () => {
     return Object.entries(weeks).map(([name, count]) => ({ name, count }));
   }, [completions]);
 
-  // Set default exercise if none selected
-  if (!selectedExerciseId && allExercises.length > 0) {
-     // Try to find one with history first
-     const exWithHistory = allExercises.find(ex => history.some(h => h.exerciseId === ex.id));
-     setSelectedExerciseId(exWithHistory?.id || allExercises[0].id);
+  if (loading) {
+     return (
+        <div className="flex justify-center pt-20">
+           <Loader2 className="w-8 h-8 text-brand-500 animate-spin" />
+        </div>
+     );
   }
 
   return (

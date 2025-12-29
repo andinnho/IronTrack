@@ -1,21 +1,30 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, Calendar } from 'lucide-react';
+import { ChevronRight, Calendar, Loader2 } from 'lucide-react';
 import { WeekDayWorkout } from '../types';
-import { storageService } from '../services/storage';
+import { api } from '../services/api';
 
 const WeekView: React.FC = () => {
   const [schedule, setSchedule] = useState<WeekDayWorkout[]>([]);
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
-    setSchedule(storageService.getSchedule());
+    const load = async () => {
+      try {
+        const data = await api.getSchedule();
+        setSchedule(data);
+      } catch (error) {
+        console.error("Failed to load schedule", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
   }, []);
 
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
   
-  // Mapping standard JS getDay to our dayId keys if needed, 
-  // but simplistic approach: check if dayId includes today's name loosely.
   const isToday = (dayId: string) => {
     const map: Record<string, string> = {
       'monday': 'monday', 'tuesday': 'tuesday', 'wednesday': 'wednesday',
@@ -23,6 +32,14 @@ const WeekView: React.FC = () => {
     };
     return map[today] === dayId;
   };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-10">
+        <Loader2 className="w-8 h-8 text-brand-500 animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

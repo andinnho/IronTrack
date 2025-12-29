@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Search, Plus, Dumbbell, BarChart } from 'lucide-react';
 import { ExerciseDefinition, MuscleGroup, WorkoutExercise } from '../types';
 import { MUSCLE_GROUPS } from '../constants';
-import { storageService } from '../services/storage';
+import { api } from '../services/api';
 
 interface ExerciseModalProps {
   isOpen: boolean;
@@ -15,8 +15,10 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({ isOpen, onClose, onSave, 
   const [step, setStep] = useState<'select' | 'details'>(initialData ? 'details' : 'select');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedMuscle, setSelectedMuscle] = useState<MuscleGroup | 'all'>('all');
+  const [allExercises, setAllExercises] = useState<ExerciseDefinition[]>([]);
+  
   const [selectedDef, setSelectedDef] = useState<ExerciseDefinition | null>(
-    initialData ? { id: initialData.exerciseId, name: initialData.name, target: initialData.target, imageUrl: initialData.imageUrl } : null
+    initialData ? { id: initialData.exerciseId, name: initialData.name, target: initialData.target, imageUrl: initialData.imageUrl } as any : null
   );
 
   // Form State
@@ -25,7 +27,15 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({ isOpen, onClose, onSave, 
   const [reps, setReps] = useState(initialData?.reps || 10);
   const [notes, setNotes] = useState(initialData?.notes || '');
 
-  const allExercises = storageService.getAllExercises();
+  useEffect(() => {
+    if (isOpen) {
+      api.getAllExercises().then(setAllExercises);
+    }
+  }, [isOpen]);
+
+  // If initialData is present, fetch full definition details when modal opens if needed, 
+  // but we can trust initialData for basic display.
+  // For the edit mode, we might want to populate equipment/level if missing from initialData.
 
   const filteredExercises = allExercises.filter(ex => {
     const matchesSearch = ex.name.toLowerCase().includes(searchTerm.toLowerCase());

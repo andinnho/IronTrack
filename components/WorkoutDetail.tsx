@@ -1,16 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Edit2, Trash2, CheckCircle2, MoreVertical } from 'lucide-react';
+import { ArrowLeft, Plus, Edit2, Trash2, CheckCircle2, Loader2 } from 'lucide-react';
 import { WeekDayWorkout, WorkoutExercise } from '../types';
-import { storageService } from '../services/storage';
+import { api } from '../services/api';
 import ExerciseModal from './ExerciseModal';
 import { MUSCLE_GROUPS } from '../constants';
 
 const WorkoutDetail: React.FC = () => {
   const { dayId } = useParams<{ dayId: string }>();
   const navigate = useNavigate();
-  const [schedule, setSchedule] = useState<WeekDayWorkout[]>([]);
   const [currentDay, setCurrentDay] = useState<WeekDayWorkout | undefined>(undefined);
+  const [loading, setLoading] = useState(true);
+  
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingExercise, setEditingExercise] = useState<WorkoutExercise | undefined>(undefined);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -20,95 +21,108 @@ const WorkoutDetail: React.FC = () => {
     loadData();
   }, [dayId]);
 
-  const loadData = () => {
-    const data = storageService.getSchedule();
-    setSchedule(data);
-    const day = data.find(d => d.dayId === dayId);
-    if (day) {
-      setCurrentDay(day);
-      setNewTitle(day.title);
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const data = await api.getSchedule();
+      const day = data.find(d => d.dayId === dayId);
+      if (day) {
+        setCurrentDay(day);
+        setNewTitle(day.title);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleUpdateTitle = () => {
+  const handleUpdateTitle = async () => {
     if (dayId && newTitle.trim()) {
-      storageService.updateDayWorkout(dayId, newTitle);
+      await api.updateDayTitle(dayId, newTitle);
       setIsEditingTitle(false);
       loadData();
     }
   };
 
-  const handleSaveExercise = (exData: Partial<WorkoutExercise>) => {
-    if (!currentDay) return;
+  const handleSaveExercise = async (exData: Partial<WorkoutExercise>) => {
+    if (!currentDay || !dayId) return;
 
-    const newSchedule = [...schedule];
-    const dayIndex = newSchedule.findIndex(d => d.dayId === currentDay.dayId);
-    if (dayIndex === -1) return;
-
-    if (editingExercise) {
-      // Edit Mode
-      const exercises = [...newSchedule[dayIndex].exercises];
-      const exIndex = exercises.findIndex(e => e.id === editingExercise.id);
-      if (exIndex !== -1) {
-        exercises[exIndex] = { ...exercises[exIndex], ...exData } as WorkoutExercise;
-        // Log history implicitly if weight changed? For now, manual tracking via "Finish" is better.
+    try {
+      if (editingExercise) {
+        // Edit Mode
+        await api.updateWorkoutExercise(editingExercise.id, {
+          sets: exData.sets,
+          reps: exData.reps,
+          weight: exData.weight,
+          notes: exData.notes
+        });
+      } else {
+        // Add Mode
+        await api.addWorkoutExercise(dayId, {
+          exerciseId: exData.exerciseId!,
+          name: exData.name!, // not used in insert but needed for type
+          target: exData.target!,
+          imageUrl: exData.imageUrl!,
+          sets: exData.sets || 3,
+          reps: exData.reps || 10,
+          weight: exData.weight || 0,
+          notes: exData.notes
+        });
       }
-      newSchedule[dayIndex].exercises = exercises;
-    } else {
-      // Add Mode
-      const newExercise: WorkoutExercise = {
-        id: Date.now().toString(),
-        exerciseId: exData.exerciseId!,
-        name: exData.name!,
-        target: exData.target!,
-        imageUrl: exData.imageUrl!,
-        sets: exData.sets || 3,
-        reps: exData.reps || 10,
-        weight: exData.weight || 0,
-        notes: exData.notes
-      };
-      newSchedule[dayIndex].exercises.push(newExercise);
+      setIsModalOpen(false);
+      setEditingExercise(undefined);
+      loadData();
+    } catch (e) {
+      console.error("Error saving exercise", e);
+      alert("Erro ao salvar exercício.");
     }
-
-    storageService.saveSchedule(newSchedule);
-    setSchedule(newSchedule);
-    setCurrentDay(newSchedule[dayIndex]);
-    setEditingExercise(undefined);
   };
 
-  const handleDeleteExercise = (id: string) => {
-    if (!currentDay) return;
-    const newSchedule = [...schedule];
-    const dayIndex = newSchedule.findIndex(d => d.dayId === currentDay.dayId);
-    newSchedule[dayIndex].exercises = newSchedule[dayIndex].exercises.filter(e => e.id !== id);
-    storageService.saveSchedule(newSchedule);
-    setSchedule(newSchedule);
-    setCurrentDay(newSchedule[dayIndex]);
+  const handleDeleteExercise = async (id: string) => {
+    if (!confirm('Remover exercício?')) return;
+    try {
+      await api.deleteWorkoutExercise(id);
+      loadData();
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const handleFinishWorkout = () => {
+  const handleFinishWorkout = async () => {
     if (!currentDay) return;
     
-    // 1. Mark attendance
-    storageService.markWorkoutComplete();
+    try {
+      // 1. Mark attendance
+      await api.markWorkoutComplete();
 
-    // 2. Log history for all exercises
-    currentDay.exercises.forEach(ex => {
-      storageService.logSet({
-        exerciseId: ex.exerciseId,
-        exerciseName: ex.name,
-        date: new Date().toISOString(),
-        weight: ex.weight,
-        reps: ex.reps,
-        sets: ex.sets
-      });
-    });
+      // 2. Log history for all exercises
+      for (const ex of currentDay.exercises) {
+        await api.logHistory({
+          exerciseId: ex.exerciseId,
+          exerciseName: ex.name,
+          date: new Date().toISOString(),
+          weight: ex.weight,
+          reps: ex.reps,
+          sets: ex.sets
+        });
+      }
 
-    alert('Treino concluído! Histórico salvo.');
-    navigate('/');
+      alert('Treino concluído! Histórico salvo.');
+      navigate('/');
+    } catch (e) {
+      console.error(e);
+      alert('Erro ao salvar progresso.');
+    }
   };
 
-  if (!currentDay) return <div className="text-center p-8">Carregando...</div>;
+  if (loading) return (
+    <div className="flex justify-center pt-20">
+      <Loader2 className="w-8 h-8 text-brand-500 animate-spin" />
+    </div>
+  );
+
+  if (!currentDay) return <div className="text-center p-8">Dia não encontrado.</div>;
 
   return (
     <div className="space-y-6 pb-20">

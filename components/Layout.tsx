@@ -1,6 +1,7 @@
 import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { Dumbbell, BarChart3, CalendarDays } from 'lucide-react';
+import { Dumbbell, BarChart3, CalendarDays, LogOut } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -8,6 +9,7 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation();
+  const { signOut } = useAuth();
 
   const getPageTitle = () => {
     if (location.pathname === '/') return 'Meus Treinos';
@@ -28,6 +30,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             {getPageTitle()}
           </h1>
         </div>
+        <button onClick={signOut} className="md:hidden p-2 text-slate-400 hover:text-white">
+           <LogOut className="w-5 h-5" />
+        </button>
       </header>
 
       {/* Main Content */}
@@ -36,14 +41,22 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       </main>
 
       {/* Desktop Sidebar Navigation */}
-      <nav className="hidden md:flex fixed left-0 top-0 bottom-0 w-20 flex-col items-center py-8 bg-dark-800 border-r border-white/10 z-40">
-        <div className="mb-8 w-10 h-10 bg-brand-600 rounded-xl flex items-center justify-center shadow-brand">
-          <Dumbbell className="w-6 h-6 text-white" />
+      <nav className="hidden md:flex fixed left-0 top-0 bottom-0 w-20 flex-col items-center py-8 bg-dark-800 border-r border-white/10 z-40 justify-between">
+        <div className="flex flex-col items-center gap-6 w-full">
+            <div className="mb-2 w-10 h-10 bg-brand-600 rounded-xl flex items-center justify-center shadow-brand">
+            <Dumbbell className="w-6 h-6 text-white" />
+            </div>
+            <DesktopNavItem to="/" icon={<CalendarDays />} label="Treinos" />
+            <DesktopNavItem to="/progress" icon={<BarChart3 />} label="Progresso" />
         </div>
-        <div className="flex flex-col gap-6 w-full">
-          <DesktopNavItem to="/" icon={<CalendarDays />} label="Treinos" />
-          <DesktopNavItem to="/progress" icon={<BarChart3 />} label="Progresso" />
-        </div>
+        
+        <button 
+          onClick={signOut}
+          className="mb-4 flex flex-col items-center gap-1 p-2 text-slate-500 hover:text-red-400 transition-colors"
+        >
+          <LogOut className="w-6 h-6" />
+          <span className="text-[10px] font-medium">Sair</span>
+        </button>
       </nav>
 
       {/* Mobile Bottom Navigation */}
