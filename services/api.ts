@@ -2,7 +2,7 @@ import { supabase } from '../lib/supabase';
 import { ExerciseDefinition, WeekDayWorkout, WorkoutExercise, HistoryLog, CompletionLog, MuscleGroup } from '../types';
 import { INITIAL_WEEK_SCHEDULE, INITIAL_EXERCISES } from '../constants';
 
-// Helper to map DB response to ExerciseDefinition type
+// Mapeador para converter os dados do Supabase para o tipo ExerciseDefinition da aplicação
 const mapExerciseFromDB = (data: any): ExerciseDefinition => ({
   id: data.id,
   name: data.name,
@@ -11,7 +11,7 @@ const mapExerciseFromDB = (data: any): ExerciseDefinition => ({
   targetMuscle: data.target_muscle,
   equipment: data.equipment,
   level: data.level,
-  imageUrl: data.image_url || data.image || `https://placehold.co/200x200/1e293b/0ea5e9?text=${encodeURIComponent(data.name)}`,
+  imageUrl: data.image_url || `https://placehold.co/200x200/1e293b/0ea5e9?text=${encodeURIComponent(data.name)}`,
 });
 
 export const api = {
@@ -25,17 +25,20 @@ export const api = {
   // --- Exercises Library ---
   getAllExercises: async (): Promise<ExerciseDefinition[]> => {
     try {
-      const { data, error } = await supabase.from('exercises').select('*').order('name');
+      // Busca explícita das colunas da nova tabela 'exercises'
+      const { data, error } = await supabase
+        .from('exercises')
+        .select('id, name, slug, muscle_group, target_muscle, equipment, image_url, level')
+        .order('name');
       
-      // Fallback to constants if DB is empty or fails
       if (error || !data || data.length === 0) {
-        if (error) console.warn('Supabase: Erro ao buscar exercícios, usando locais.', error.message);
+        if (error) console.warn('Supabase: Erro ao buscar exercícios, usando dados locais.', error.message);
         return INITIAL_EXERCISES;
       }
       
       return data.map(mapExerciseFromDB);
     } catch (err) {
-      console.error('Erro crítico ao buscar exercícios:', err);
+      console.error('Erro ao buscar exercícios do banco:', err);
       return INITIAL_EXERCISES;
     }
   },
@@ -45,25 +48,25 @@ export const api = {
     try {
       const user = await api.getUser();
 
-      // 1. Get custom day titles
+      // 1. Títulos customizados dos dias
       const { data: schedules } = await supabase
         .from('user_schedules')
         .select('day_id, title')
         .eq('user_id', user.id);
 
-      // 2. Get workout exercises with joined details
+      // 2. Exercícios do treino com JOIN na nova estrutura
       const { data: items, error: itemsError } = await supabase
         .from('workout_items')
         .select(`
           *,
-          exercises:exercise_id (*)
+          exercises:exercise_id (id, name, muscle_group, image_url)
         `)
         .eq('user_id', user.id)
         .order('created_at', { ascending: true });
 
       if (itemsError) throw itemsError;
 
-      // 3. Construct the WeekDayWorkout structure
+      // 3. Reconstruir a estrutura da semana
       return INITIAL_WEEK_SCHEDULE.map(day => {
         const dbSchedule = schedules?.find(s => s.day_id === day.dayId);
         const dayItems = items?.filter(i => i.day_id === day.dayId) || [];
@@ -78,7 +81,7 @@ export const api = {
               exerciseId: item.exercise_id,
               name: ex?.name || 'Exercício Removido',
               target: (ex?.muscle_group === 'abs' ? 'core' : ex?.muscle_group || 'other') as MuscleGroup,
-              imageUrl: ex?.image_url || ex?.image || `https://placehold.co/200x200/1e293b/0ea5e9?text=Ex`,
+              imageUrl: ex?.image_url || `https://placehold.co/200x200/1e293b/0ea5e9?text=Ex`,
               sets: item.sets || 3,
               reps: item.reps || 10,
               weight: item.weight || 0,
@@ -88,15 +91,13 @@ export const api = {
         };
       });
     } catch (error) {
-      console.error('Erro ao carregar agenda do Supabase:', error);
+      console.error('Erro ao carregar agenda:', error);
       return INITIAL_WEEK_SCHEDULE;
     }
   },
 
   updateDayTitle: async (dayId: string, title: string) => {
     const user = await api.getUser();
-    
-    // Check for existing entry to decide between insert or update
     const { data } = await supabase
       .from('user_schedules')
       .select('id')
@@ -111,7 +112,6 @@ export const api = {
     }
   },
 
-  // --- CRUD Workout Items ---
   addWorkoutExercise: async (dayId: string, exercise: Omit<WorkoutExercise, 'id'>) => {
     const user = await api.getUser();
     const { error } = await supabase.from('workout_items').insert({
@@ -143,7 +143,6 @@ export const api = {
     if (error) throw error;
   },
 
-  // --- Progressive Overload History ---
   logHistory: async (log: Omit<HistoryLog, 'id'>) => {
     const user = await api.getUser();
     const { error } = await supabase.from('history_logs').insert({
@@ -183,13 +182,10 @@ export const api = {
     }
   },
 
-  // --- Consistency Logging ---
   markWorkoutComplete: async () => {
     try {
       const user = await api.getUser();
       const today = new Date().toISOString().split('T')[0];
-      
-      // Check if already completed today
       const { data } = await supabase
         .from('completion_logs')
         .select('id')
@@ -201,7 +197,7 @@ export const api = {
         await supabase.from('completion_logs').insert({ user_id: user.id, date: today });
       }
     } catch (err) {
-      console.error('Erro ao marcar treino como concluído:', err);
+      console.error('Erro ao marcar conclusão:', err);
     }
   },
 
@@ -216,7 +212,7 @@ export const api = {
       if (error) throw error;
       return data || [];
     } catch (err) {
-      console.error('Erro ao buscar logs de conclusão:', err);
+      console.error('Erro ao buscar conclusões:', err);
       return [];
     }
   }
