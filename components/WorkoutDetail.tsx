@@ -50,7 +50,6 @@ const WorkoutDetail: React.FC = () => {
 
     try {
       if (editingExercise) {
-        // Edit Mode
         await api.updateWorkoutExercise(editingExercise.id, {
           sets: exData.sets,
           reps: exData.reps,
@@ -58,10 +57,9 @@ const WorkoutDetail: React.FC = () => {
           notes: exData.notes
         });
       } else {
-        // Add Mode
         await api.addWorkoutExercise(dayId, {
           exerciseId: exData.exerciseId!,
-          name: exData.name!, // not used in insert but needed for type
+          name: exData.name!,
           target: exData.target!,
           imageUrl: exData.imageUrl!,
           sets: exData.sets || 3,
@@ -73,9 +71,9 @@ const WorkoutDetail: React.FC = () => {
       setIsModalOpen(false);
       setEditingExercise(undefined);
       loadData();
-    } catch (e) {
-      console.error("Error saving exercise", e);
-      alert("Erro ao salvar exercício.");
+    } catch (e: any) {
+      console.error("Erro completo ao salvar:", e);
+      alert(`Erro ao salvar: ${e.message || "Verifique a conexão com o banco de dados."}`);
     }
   };
 
@@ -93,10 +91,7 @@ const WorkoutDetail: React.FC = () => {
     if (!currentDay) return;
     
     try {
-      // 1. Mark attendance
       await api.markWorkoutComplete();
-
-      // 2. Log history for all exercises
       for (const ex of currentDay.exercises) {
         await api.logHistory({
           exerciseId: ex.exerciseId,
@@ -107,12 +102,11 @@ const WorkoutDetail: React.FC = () => {
           sets: ex.sets
         });
       }
-
       alert('Treino concluído! Histórico salvo.');
       navigate('/');
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      alert('Erro ao salvar progresso.');
+      alert('Erro ao salvar progresso: ' + (e.message || 'Erro desconhecido'));
     }
   };
 
@@ -126,7 +120,6 @@ const WorkoutDetail: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-20">
-      {/* Header Actions */}
       <div className="flex items-center justify-between mb-4">
         <button onClick={() => navigate('/')} className="flex items-center text-slate-400 hover:text-white transition-colors">
           <ArrowLeft className="w-5 h-5 mr-1" /> Voltar
@@ -168,7 +161,6 @@ const WorkoutDetail: React.FC = () => {
         </div>
       </div>
 
-      {/* Exercise List */}
       <div className="space-y-4">
         {currentDay.exercises.map((ex) => (
           <div key={ex.id} className="bg-dark-800 rounded-xl p-4 border border-white/5 hover:border-brand-500/30 transition-all flex gap-4 group relative overflow-hidden">

@@ -2,7 +2,6 @@ import { supabase } from '../lib/supabase';
 import { ExerciseDefinition, WeekDayWorkout, WorkoutExercise, HistoryLog, CompletionLog, MuscleGroup } from '../types';
 import { INITIAL_WEEK_SCHEDULE, INITIAL_EXERCISES } from '../constants';
 
-// Mapeador para converter os dados do Supabase para o tipo ExerciseDefinition da aplicação
 const mapExerciseFromDB = (data: any): ExerciseDefinition => ({
   id: data.id,
   name: data.name,
@@ -15,58 +14,50 @@ const mapExerciseFromDB = (data: any): ExerciseDefinition => ({
 });
 
 export const api = {
-  // --- Auth & User context ---
   getUser: async () => {
     const { data: { user }, error } = await supabase.auth.getUser();
     if (error || !user) throw new Error('Usuário não autenticado');
     return user;
   },
 
-  // --- Exercises Library ---
   getAllExercises: async (): Promise<ExerciseDefinition[]> => {
     try {
-      // Busca explícita das colunas da nova tabela 'exercises'
       const { data, error } = await supabase
         .from('exercises')
-        .select('id, name, slug, muscle_group, target_muscle, equipment, image_url, level')
+        .select('*')
         .order('name');
       
       if (error || !data || data.length === 0) {
-        if (error) console.warn('Supabase: Erro ao buscar exercícios, usando dados locais.', error.message);
         return INITIAL_EXERCISES;
       }
       
       return data.map(mapExerciseFromDB);
     } catch (err) {
-      console.error('Erro ao buscar exercícios do banco:', err);
+      console.error('Erro ao buscar exercícios:', err);
       return INITIAL_EXERCISES;
     }
   },
 
-  // --- Workout Schedule ---
   getSchedule: async (): Promise<WeekDayWorkout[]> => {
     try {
       const user = await api.getUser();
 
-      // 1. Títulos customizados dos dias
       const { data: schedules } = await supabase
         .from('user_schedules')
         .select('day_id, title')
         .eq('user_id', user.id);
 
-      // 2. Exercícios do treino com JOIN na nova estrutura
       const { data: items, error: itemsError } = await supabase
         .from('workout_items')
         .select(`
           *,
-          exercises:exercise_id (id, name, muscle_group, image_url)
+          exercises:exercise_id (*)
         `)
         .eq('user_id', user.id)
         .order('created_at', { ascending: true });
 
       if (itemsError) throw itemsError;
 
-      // 3. Reconstruir a estrutura da semana
       return INITIAL_WEEK_SCHEDULE.map(day => {
         const dbSchedule = schedules?.find(s => s.day_id === day.dayId);
         const dayItems = items?.filter(i => i.day_id === day.dayId) || [];
@@ -79,7 +70,7 @@ export const api = {
              return {
               id: item.id,
               exerciseId: item.exercise_id,
-              name: ex?.name || 'Exercício Removido',
+              name: ex?.name || item.name || 'Exercício Local',
               target: (ex?.muscle_group === 'abs' ? 'core' : ex?.muscle_group || 'other') as MuscleGroup,
               imageUrl: ex?.image_url || `https://placehold.co/200x200/1e293b/0ea5e9?text=Ex`,
               sets: item.sets || 3,
@@ -114,16 +105,21 @@ export const api = {
 
   addWorkoutExercise: async (dayId: string, exercise: Omit<WorkoutExercise, 'id'>) => {
     const user = await api.getUser();
+    
     const { error } = await supabase.from('workout_items').insert({
       user_id: user.id,
       day_id: dayId,
-      exercise_id: exercise.exerciseId,
+      exercise_id: String(exercise.exerciseId),
       sets: exercise.sets,
       reps: exercise.reps,
       weight: exercise.weight,
       notes: exercise.notes
     });
-    if (error) throw error;
+    
+    if (error) {
+      console.error("Supabase error:", error);
+      throw new Error(error.message || "Erro desconhecido no banco de dados");
+    }
   },
 
   updateWorkoutExercise: async (id: string, updates: Partial<WorkoutExercise>) => {
@@ -134,26 +130,27 @@ export const api = {
        weight: updates.weight,
        notes: updates.notes
     }).eq('id', id).eq('user_id', user.id);
-    if (error) throw error;
+    
+    if (error) throw new Error(error.message);
   },
 
   deleteWorkoutExercise: async (id: string) => {
     const user = await api.getUser();
     const { error } = await supabase.from('workout_items').delete().eq('id', id).eq('user_id', user.id);
-    if (error) throw error;
+    if (error) throw new Error(error.message);
   },
 
   logHistory: async (log: Omit<HistoryLog, 'id'>) => {
     const user = await api.getUser();
     const { error } = await supabase.from('history_logs').insert({
       user_id: user.id,
-      exercise_id: log.exerciseId,
+      exercise_id: String(log.exerciseId),
       weight: log.weight,
       reps: log.reps,
       sets: log.sets,
       date: log.date
     });
-    if (error) throw error;
+    if (error) throw new Error(error.message);
   },
 
   getHistory: async (): Promise<HistoryLog[]> => {
