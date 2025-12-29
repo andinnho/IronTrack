@@ -72,10 +72,19 @@ const WorkoutDetail: React.FC = () => {
       setEditingExercise(undefined);
       loadData();
     } catch (e: any) {
-      console.error("Erro completo ao salvar:", e);
-      // Garante que o erro exibido seja uma string legível
-      const errorMsg = typeof e === 'string' ? e : (e.message || "Erro desconhecido ao salvar exercício.");
-      alert(`Erro ao salvar: ${errorMsg}`);
+      console.error("Erro detectado ao salvar exercício:", e);
+      
+      // Converte o erro em uma mensagem legível
+      let errorMsg = "Erro desconhecido.";
+      if (typeof e === 'string') {
+        errorMsg = e;
+      } else if (e instanceof Error) {
+        errorMsg = e.message;
+      } else if (typeof e === 'object' && e !== null) {
+        errorMsg = e.message || e.details || JSON.stringify(e);
+      }
+      
+      alert(`⚠️ Falha ao salvar:\n${errorMsg}`);
     }
   };
 

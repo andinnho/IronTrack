@@ -20,13 +20,17 @@ export const api = {
     return user;
   },
 
-  // Helper interno para garantir que o exercício existe no banco antes de referenciá-lo
   ensureExerciseExists: async (exerciseId: string) => {
-    const { data } = await supabase.from('exercises').select('id').eq('id', exerciseId).single();
+    const { data, error: fetchError } = await supabase.from('exercises').select('id').eq('id', exerciseId).maybeSingle();
+    
+    if (fetchError) {
+      console.warn("Erro ao verificar exercício:", fetchError);
+    }
+
     if (!data) {
       const def = INITIAL_EXERCISES.find(ex => ex.id === exerciseId);
       if (def) {
-        await supabase.from('exercises').insert({
+        const { error: insertError } = await supabase.from('exercises').insert({
           id: def.id,
           name: def.name,
           slug: def.slug,
@@ -36,6 +40,13 @@ export const api = {
           image_url: def.imageUrl,
           level: def.level
         });
+        
+        if (insertError) {
+          console.error("Erro ao sincronizar exercício local:", insertError);
+          throw new Error(`Não foi possível cadastrar o exercício ${def.name} no banco. Detalhe: ${insertError.message}`);
+        }
+      } else {
+        throw new Error(`Exercício com ID ${exerciseId} não encontrado nas definições locais.`);
       }
     }
   },
@@ -126,7 +137,7 @@ export const api = {
   addWorkoutExercise: async (dayId: string, exercise: Omit<WorkoutExercise, 'id'>) => {
     const user = await api.getUser();
     
-    // Garantir que o exercício existe no banco de dados (FOREIGN KEY SAFETY)
+    // Sincronizar definição do exercício antes de vincular ao treino
     await api.ensureExerciseExists(exercise.exerciseId);
     
     const { error } = await supabase.from('workout_items').insert({
@@ -140,8 +151,8 @@ export const api = {
     });
     
     if (error) {
-      console.error("Supabase detailed error:", error);
-      throw new Error(error.message || "Erro desconhecido ao inserir item de treino");
+      console.error("Erro Supabase (Workout Item):", error);
+      throw new Error(error.message || "Falha ao salvar exercício no treino.");
     }
   },
 
