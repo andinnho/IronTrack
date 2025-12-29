@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Search, Plus, Dumbbell, BarChart } from 'lucide-react';
+import { X, Search, Plus, Dumbbell, BarChart, Loader2 } from 'lucide-react';
 import { ExerciseDefinition, MuscleGroup, WorkoutExercise } from '../types';
 import { MUSCLE_GROUPS } from '../constants';
 import { api } from '../services/api';
@@ -16,12 +16,12 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({ isOpen, onClose, onSave, 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedMuscle, setSelectedMuscle] = useState<MuscleGroup | 'all'>('all');
   const [allExercises, setAllExercises] = useState<ExerciseDefinition[]>([]);
+  const [loading, setLoading] = useState(false);
   
   const [selectedDef, setSelectedDef] = useState<ExerciseDefinition | null>(
     initialData ? { id: initialData.exerciseId, name: initialData.name, target: initialData.target, imageUrl: initialData.imageUrl } as any : null
   );
 
-  // Form State
   const [weight, setWeight] = useState(initialData?.weight || 0);
   const [sets, setSets] = useState(initialData?.sets || 3);
   const [reps, setReps] = useState(initialData?.reps || 10);
@@ -29,13 +29,13 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({ isOpen, onClose, onSave, 
 
   useEffect(() => {
     if (isOpen) {
-      api.getAllExercises().then(setAllExercises);
+      setLoading(true);
+      api.getAllExercises().then(data => {
+        setAllExercises(data);
+        setLoading(false);
+      }).catch(() => setLoading(false));
     }
   }, [isOpen]);
-
-  // If initialData is present, fetch full definition details when modal opens if needed, 
-  // but we can trust initialData for basic display.
-  // For the edit mode, we might want to populate equipment/level if missing from initialData.
 
   const filteredExercises = allExercises.filter(ex => {
     const matchesSearch = ex.name.toLowerCase().includes(searchTerm.toLowerCase());
@@ -62,7 +62,6 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({ isOpen, onClose, onSave, 
       notes,
     });
     
-    // Reset
     setStep('select');
     setSelectedDef(null);
     setWeight(0);
@@ -72,10 +71,9 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({ isOpen, onClose, onSave, 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
       <div className="bg-dark-800 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl border border-white/10 flex flex-col max-h-[90vh]">
         
-        {/* Header */}
         <div className="p-4 border-b border-white/10 flex justify-between items-center bg-dark-900">
           <h2 className="text-lg font-bold text-white">
             {step === 'select' ? 'Adicionar Exercício' : 'Configurar Série'}
@@ -85,19 +83,16 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({ isOpen, onClose, onSave, 
           </button>
         </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-4">
-          
+        <div className="flex-1 overflow-y-auto p-4 min-h-[300px]">
           {step === 'select' ? (
             <div className="space-y-4">
-              {/* Search & Filter */}
               <div className="sticky top-0 bg-dark-800 pb-2 space-y-3 z-10">
                 <div className="relative">
                   <Search className="absolute left-3 top-3 w-5 h-5 text-slate-500" />
                   <input
                     type="text"
                     placeholder="Buscar exercício..."
-                    className="w-full bg-dark-900 border border-slate-700 rounded-xl py-2.5 pl-10 pr-4 text-white focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none"
+                    className="w-full bg-dark-900 border border-slate-700 rounded-xl py-2.5 pl-10 pr-4 text-white focus:ring-2 focus:ring-brand-500 outline-none"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
@@ -125,36 +120,40 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({ isOpen, onClose, onSave, 
                 </div>
               </div>
 
-              {/* List */}
-              <div className="grid grid-cols-1 gap-2">
-                {filteredExercises.map(ex => (
-                  <button
-                    key={ex.id}
-                    onClick={() => handleSelectExercise(ex)}
-                    className="flex items-center gap-3 p-3 bg-slate-800/50 hover:bg-slate-800 rounded-xl border border-transparent hover:border-brand-500/50 transition-all text-left group"
-                  >
-                    <img src={ex.imageUrl} alt={ex.name} className="w-12 h-12 rounded-lg object-cover bg-slate-700" />
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-slate-200 group-hover:text-brand-400 transition-colors">{ex.name}</h3>
-                      <div className="flex items-center gap-2 mt-1">
-                         <span className="text-[10px] bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded uppercase">
-                            {MUSCLE_GROUPS.find(m => m.id === ex.target)?.label}
-                         </span>
-                         {ex.targetMuscle && (
-                            <span className="text-[10px] text-slate-500 truncate max-w-[100px]">
-                               • {ex.targetMuscle}
-                            </span>
-                         )}
+              {loading ? (
+                <div className="flex flex-col items-center justify-center py-12 text-slate-500">
+                   <Loader2 className="w-8 h-8 animate-spin text-brand-500 mb-2" />
+                   <p>Carregando exercícios...</p>
+                </div>
+              ) : filteredExercises.length > 0 ? (
+                <div className="grid grid-cols-1 gap-2">
+                  {filteredExercises.map(ex => (
+                    <button
+                      key={ex.id}
+                      onClick={() => handleSelectExercise(ex)}
+                      className="flex items-center gap-3 p-3 bg-slate-800/50 hover:bg-slate-800 rounded-xl border border-transparent hover:border-brand-500/50 transition-all text-left group"
+                    >
+                      <img src={ex.imageUrl} alt={ex.name} className="w-12 h-12 rounded-lg object-cover bg-slate-700" />
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-slate-200 group-hover:text-brand-400">{ex.name}</h3>
+                        <div className="flex items-center gap-2 mt-1">
+                           <span className="text-[10px] bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded uppercase">
+                              {MUSCLE_GROUPS.find(m => m.id === ex.target)?.label}
+                           </span>
+                        </div>
                       </div>
-                    </div>
-                    <Plus className="w-5 h-5 text-slate-500 group-hover:text-brand-500" />
-                  </button>
-                ))}
-              </div>
+                      <Plus className="w-5 h-5 text-slate-500 group-hover:text-brand-500" />
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-12 text-center text-slate-500">
+                  <p>Nenhum exercício encontrado.</p>
+                </div>
+              )}
             </div>
           ) : (
             <div className="space-y-6">
-              {/* Selected Summary */}
               <div className="flex items-center gap-4 p-4 bg-slate-800/50 rounded-xl border border-white/5">
                 <img src={selectedDef?.imageUrl} alt={selectedDef?.name} className="w-16 h-16 rounded-lg object-cover bg-slate-700" />
                 <div>
@@ -163,26 +162,13 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({ isOpen, onClose, onSave, 
                     <span className="text-xs text-brand-400 font-medium">
                         {MUSCLE_GROUPS.find(m => m.id === selectedDef?.target)?.label}
                     </span>
-                    {selectedDef?.equipment && (
-                        <div className="flex items-center gap-1 text-xs text-slate-400">
-                             <Dumbbell className="w-3 h-3" />
-                             {selectedDef.equipment}
-                        </div>
-                    )}
-                    {selectedDef?.level && (
-                        <div className="flex items-center gap-1 text-xs text-slate-400">
-                             <BarChart className="w-3 h-3" />
-                             <span className="capitalize">{selectedDef.level}</span>
-                        </div>
-                    )}
                   </div>
                 </div>
               </div>
 
-              {/* Inputs */}
               <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <label className="text-xs text-slate-400 uppercase font-bold tracking-wider">Carga (kg)</label>
+                  <label className="text-xs text-slate-400 uppercase font-bold tracking-wider text-center block">Carga (kg)</label>
                   <input
                     type="number"
                     className="w-full bg-dark-900 border border-slate-700 rounded-lg p-3 text-center text-xl font-mono text-white focus:border-brand-500 outline-none"
@@ -191,7 +177,7 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({ isOpen, onClose, onSave, 
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-xs text-slate-400 uppercase font-bold tracking-wider">Séries</label>
+                  <label className="text-xs text-slate-400 uppercase font-bold tracking-wider text-center block">Séries</label>
                   <input
                     type="number"
                     className="w-full bg-dark-900 border border-slate-700 rounded-lg p-3 text-center text-xl font-mono text-white focus:border-brand-500 outline-none"
@@ -200,7 +186,7 @@ const ExerciseModal: React.FC<ExerciseModalProps> = ({ isOpen, onClose, onSave, 
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-xs text-slate-400 uppercase font-bold tracking-wider">Reps</label>
+                  <label className="text-xs text-slate-400 uppercase font-bold tracking-wider text-center block">Reps</label>
                   <input
                     type="number"
                     className="w-full bg-dark-900 border border-slate-700 rounded-lg p-3 text-center text-xl font-mono text-white focus:border-brand-500 outline-none"
