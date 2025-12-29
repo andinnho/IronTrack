@@ -3,14 +3,14 @@ import { ExerciseDefinition, WeekDayWorkout, WorkoutExercise, HistoryLog, Comple
 import { INITIAL_WEEK_SCHEDULE, INITIAL_EXERCISES } from '../constants';
 
 const mapExerciseFromDB = (data: any): ExerciseDefinition => ({
-  id: data.id,
-  name: data.name,
-  slug: data.slug || data.name.toLowerCase().replace(/\s+/g, '-'),
-  target: (data.muscle_group === 'abs' ? 'core' : data.muscle_group) as MuscleGroup, 
+  id: String(data.id),
+  name: data.name || 'Sem nome',
+  slug: data.slug || (data.name ? data.name.toLowerCase().replace(/\s+/g, '-') : 'sem-slug'),
+  target: (data.muscle_group === 'abs' ? 'core' : (data.muscle_group || 'other')) as MuscleGroup, 
   targetMuscle: data.target_muscle,
   equipment: data.equipment,
   level: data.level,
-  imageUrl: data.image_url || `https://placehold.co/200x200/1e293b/0ea5e9?text=${encodeURIComponent(data.name)}`,
+  imageUrl: data.image_url || `https://placehold.co/200x200/1e293b/0ea5e9?text=${encodeURIComponent(data.name || 'Ex')}`,
 });
 
 export const api = {
@@ -21,12 +21,14 @@ export const api = {
   },
 
   ensureExerciseExists: async (exerciseId: string) => {
+    // Busca se o exercício já existe
     const { data, error: fetchError } = await supabase.from('exercises').select('id').eq('id', exerciseId).maybeSingle();
     
     if (fetchError) {
-      console.warn("Erro ao verificar exercício:", fetchError);
+      console.warn("Erro ao verificar exercício:", fetchError.message);
     }
 
+    // Se não existir, tenta inserir a definição local
     if (!data) {
       const def = INITIAL_EXERCISES.find(ex => ex.id === exerciseId);
       if (def) {
@@ -42,11 +44,11 @@ export const api = {
         });
         
         if (insertError) {
-          console.error("Erro ao sincronizar exercício local:", insertError);
+          console.error("Erro detalhado ao sincronizar exercício:", insertError);
           throw new Error(`Não foi possível cadastrar o exercício ${def.name} no banco. Detalhe: ${insertError.message}`);
         }
       } else {
-        throw new Error(`Exercício com ID ${exerciseId} não encontrado nas definições locais.`);
+        throw new Error(`O exercício com ID ${exerciseId} não foi encontrado na base local de exercícios.`);
       }
     }
   },
@@ -58,11 +60,22 @@ export const api = {
         .select('*')
         .order('name');
       
-      if (error || !data || data.length === 0) {
-        return INITIAL_EXERCISES;
-      }
+      const dbExercises = (data || []).map(mapExerciseFromDB);
       
-      return data.map(mapExerciseFromDB);
+      // Merge: Usamos INITIAL_EXERCISES como base e sobrescrevemos com o que está no banco (que pode ter IDs iguais)
+      // Isso garante que se o banco estiver vazio ou parcial, o usuário ainda veja todos os exercícios iniciais.
+      const merged = [...INITIAL_EXERCISES];
+      
+      dbExercises.forEach(dbEx => {
+        const index = merged.findIndex(ex => ex.id === dbEx.id);
+        if (index !== -1) {
+          merged[index] = dbEx;
+        } else {
+          merged.push(dbEx);
+        }
+      });
+      
+      return merged.sort((a, b) => a.name.localeCompare(b.name));
     } catch (err) {
       console.error('Erro ao buscar exercícios:', err);
       return INITIAL_EXERCISES;
@@ -87,7 +100,7 @@ export const api = {
         .eq('user_id', user.id)
         .order('created_at', { ascending: true });
 
-      if (itemsError) throw itemsError;
+      if (itemsError) throw new Error(itemsError.message);
 
       return INITIAL_WEEK_SCHEDULE.map(day => {
         const dbSchedule = schedules?.find(s => s.day_id === day.dayId);
@@ -112,8 +125,8 @@ export const api = {
           })
         };
       });
-    } catch (error) {
-      console.error('Erro ao carregar agenda:', error);
+    } catch (error: any) {
+      console.error('Erro ao carregar agenda:', error.message);
       return INITIAL_WEEK_SCHEDULE;
     }
   },
@@ -137,7 +150,7 @@ export const api = {
   addWorkoutExercise: async (dayId: string, exercise: Omit<WorkoutExercise, 'id'>) => {
     const user = await api.getUser();
     
-    // Sincronizar definição do exercício antes de vincular ao treino
+    // IMPORTANTE: Tenta garantir que o exercício existe antes de adicionar ao treino
     await api.ensureExerciseExists(exercise.exerciseId);
     
     const { error } = await supabase.from('workout_items').insert({
@@ -151,8 +164,8 @@ export const api = {
     });
     
     if (error) {
-      console.error("Erro Supabase (Workout Item):", error);
-      throw new Error(error.message || "Falha ao salvar exercício no treino.");
+      console.error("Erro ao inserir no workout_items:", error);
+      throw new Error(error.message || "Não foi possível vincular o exercício ao seu treino.");
     }
   },
 
@@ -176,6 +189,7 @@ export const api = {
 
   logHistory: async (log: Omit<HistoryLog, 'id'>) => {
     const user = await api.getUser();
+    // Garante que o exercício existe no banco de dados para não quebrar a Foreign Key do histórico
     await api.ensureExerciseExists(log.exerciseId);
     
     const { error } = await supabase.from('history_logs').insert({
@@ -198,7 +212,7 @@ export const api = {
         .eq('user_id', user.id)
         .order('date', { ascending: true });
       
-      if (error) throw error;
+      if (error) throw new Error(error.message);
       
       return (data || []).map((row: any) => ({
         id: row.id,
@@ -209,8 +223,8 @@ export const api = {
         reps: row.reps,
         sets: row.sets
       }));
-    } catch (err) {
-      console.error('Erro ao buscar histórico:', err);
+    } catch (err: any) {
+      console.error('Erro ao buscar histórico:', err.message);
       return [];
     }
   },
@@ -229,8 +243,8 @@ export const api = {
       if (!data) {
         await supabase.from('completion_logs').insert({ user_id: user.id, date: today });
       }
-    } catch (err) {
-      console.error('Erro ao marcar conclusão:', err);
+    } catch (err: any) {
+      console.error('Erro ao marcar conclusão:', err.message);
     }
   },
 
@@ -242,10 +256,10 @@ export const api = {
         .select('date')
         .eq('user_id', user.id);
       
-      if (error) throw error;
+      if (error) throw new Error(error.message);
       return data || [];
-    } catch (err) {
-      console.error('Erro ao buscar conclusões:', err);
+    } catch (err: any) {
+      console.error('Erro ao buscar conclusões:', err.message);
       return [];
     }
   }
