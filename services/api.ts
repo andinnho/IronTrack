@@ -2,15 +2,27 @@ import { supabase } from '../lib/supabase';
 import { ExerciseDefinition, WeekDayWorkout, WorkoutExercise, HistoryLog, CompletionLog, MuscleGroup } from '../types';
 import { INITIAL_WEEK_SCHEDULE, INITIAL_EXERCISES } from '../constants';
 
+// Função para converter o grupo muscular do banco (PT) para o ID interno (EN)
+const mapMuscleGroup = (group: string): MuscleGroup => {
+  const g = group?.toLowerCase();
+  if (g === 'peito') return 'chest';
+  if (g === 'costas') return 'back';
+  if (g === 'ombro') return 'shoulders';
+  if (g === 'biceps' || g === 'triceps') return 'arms';
+  if (g === 'pernas' || g === 'panturrilha') return 'legs';
+  if (g === 'abdomen') return 'core';
+  return 'other';
+};
+
 const mapExerciseFromDB = (data: any): ExerciseDefinition => ({
   id: String(data.id),
-  name: data.name || 'Sem nome',
-  slug: data.slug || (data.name ? data.name.toLowerCase().replace(/\s+/g, '-') : 'sem-slug'),
-  target: (data.muscle_group === 'abs' ? 'core' : (data.muscle_group || 'other')) as MuscleGroup, 
-  targetMuscle: data.target_muscle,
-  equipment: data.equipment,
-  level: data.level,
-  imageUrl: data.image_url || `https://placehold.co/200x200/1e293b/0ea5e9?text=${encodeURIComponent(data.name || 'Ex')}`,
+  name: data.nome || 'Sem nome',
+  slug: data.slug || (data.nome ? data.nome.toLowerCase().replace(/\s+/g, '-') : 'sem-slug'),
+  target: mapMuscleGroup(data.grupo_muscular), 
+  targetMuscle: '', 
+  equipment: data.equipamento || '',
+  level: 'beginner',
+  imageUrl: `https://placehold.co/200x200/1e293b/0ea5e9?text=${encodeURIComponent(data.nome || 'Ex')}`,
 });
 
 export const api = {
@@ -21,34 +33,28 @@ export const api = {
   },
 
   ensureExerciseExists: async (exerciseId: string) => {
-    // Busca se o exercício já existe
     const { data, error: fetchError } = await supabase.from('exercises').select('id').eq('id', exerciseId).maybeSingle();
-    
-    if (fetchError) {
-      console.warn("Erro ao verificar exercício:", fetchError.message);
-    }
+    if (fetchError) console.warn("Erro ao verificar exercício:", fetchError.message);
 
-    // Se não existir, tenta inserir a definição local
     if (!data) {
       const def = INITIAL_EXERCISES.find(ex => ex.id === exerciseId);
       if (def) {
         const { error: insertError } = await supabase.from('exercises').insert({
           id: def.id,
-          name: def.name,
+          nome: def.name,
           slug: def.slug,
-          muscle_group: def.target === 'core' ? 'abs' : def.target,
-          target_muscle: def.targetMuscle,
-          equipment: def.equipment,
-          image_url: def.imageUrl,
-          level: def.level
+          grupo_muscular: def.target === 'chest' ? 'peito' : 
+                         def.target === 'back' ? 'costas' : 
+                         def.target === 'shoulders' ? 'ombro' : 
+                         def.target === 'arms' ? 'biceps' : 
+                         def.target === 'legs' ? 'pernas' : 'abdomen',
+          equipamento: def.equipment,
+          imagem_prompt: `ilustração de ${def.name}`
         });
         
         if (insertError) {
-          console.error("Erro detalhado ao sincronizar exercício:", insertError);
-          throw new Error(`Não foi possível cadastrar o exercício ${def.name} no banco. Detalhe: ${insertError.message}`);
+          throw new Error(`Erro ao cadastrar ${def.name}: ${insertError.message}`);
         }
-      } else {
-        throw new Error(`O exercício com ID ${exerciseId} não foi encontrado na base local de exercícios.`);
       }
     }
   },
@@ -58,24 +64,15 @@ export const api = {
       const { data, error } = await supabase
         .from('exercises')
         .select('*')
-        .order('name');
+        .order('nome');
       
-      const dbExercises = (data || []).map(mapExerciseFromDB);
+      if (error) throw error;
+
+      if (!data || data.length === 0) {
+        return INITIAL_EXERCISES;
+      }
       
-      // Merge: Usamos INITIAL_EXERCISES como base e sobrescrevemos com o que está no banco (que pode ter IDs iguais)
-      // Isso garante que se o banco estiver vazio ou parcial, o usuário ainda veja todos os exercícios iniciais.
-      const merged = [...INITIAL_EXERCISES];
-      
-      dbExercises.forEach(dbEx => {
-        const index = merged.findIndex(ex => ex.id === dbEx.id);
-        if (index !== -1) {
-          merged[index] = dbEx;
-        } else {
-          merged.push(dbEx);
-        }
-      });
-      
-      return merged.sort((a, b) => a.name.localeCompare(b.name));
+      return data.map(mapExerciseFromDB);
     } catch (err) {
       console.error('Erro ao buscar exercícios:', err);
       return INITIAL_EXERCISES;
@@ -85,18 +82,15 @@ export const api = {
   getSchedule: async (): Promise<WeekDayWorkout[]> => {
     try {
       const user = await api.getUser();
-
       const { data: schedules } = await supabase
         .from('user_schedules')
         .select('day_id, title')
         .eq('user_id', user.id);
 
+      // CORREÇÃO: Usando 'exercises(*)' em vez de 'exercises:exercise_id (*)'
       const { data: items, error: itemsError } = await supabase
         .from('workout_items')
-        .select(`
-          *,
-          exercises:exercise_id (*)
-        `)
+        .select(`*, exercises (*)`)
         .eq('user_id', user.id)
         .order('created_at', { ascending: true });
 
@@ -114,9 +108,9 @@ export const api = {
              return {
               id: item.id,
               exerciseId: item.exercise_id,
-              name: ex?.name || item.name || 'Exercício Local',
-              target: (ex?.muscle_group === 'abs' ? 'core' : ex?.muscle_group || 'other') as MuscleGroup,
-              imageUrl: ex?.image_url || `https://placehold.co/200x200/1e293b/0ea5e9?text=Ex`,
+              name: ex?.nome || item.name || 'Exercício Local',
+              target: mapMuscleGroup(ex?.grupo_muscular),
+              imageUrl: `https://placehold.co/200x200/1e293b/0ea5e9?text=${encodeURIComponent(ex?.nome || 'Ex')}`,
               sets: item.sets || 3,
               reps: item.reps || 10,
               weight: item.weight || 0,
@@ -133,13 +127,7 @@ export const api = {
 
   updateDayTitle: async (dayId: string, title: string) => {
     const user = await api.getUser();
-    const { data } = await supabase
-      .from('user_schedules')
-      .select('id')
-      .eq('user_id', user.id)
-      .eq('day_id', dayId)
-      .single();
-
+    const { data } = await supabase.from('user_schedules').select('id').eq('user_id', user.id).eq('day_id', dayId).maybeSingle();
     if (data) {
        await supabase.from('user_schedules').update({ title }).eq('id', data.id);
     } else {
@@ -149,10 +137,7 @@ export const api = {
 
   addWorkoutExercise: async (dayId: string, exercise: Omit<WorkoutExercise, 'id'>) => {
     const user = await api.getUser();
-    
-    // IMPORTANTE: Tenta garantir que o exercício existe antes de adicionar ao treino
     await api.ensureExerciseExists(exercise.exerciseId);
-    
     const { error } = await supabase.from('workout_items').insert({
       user_id: user.id,
       day_id: dayId,
@@ -162,11 +147,7 @@ export const api = {
       weight: exercise.weight,
       notes: exercise.notes
     });
-    
-    if (error) {
-      console.error("Erro ao inserir no workout_items:", error);
-      throw new Error(error.message || "Não foi possível vincular o exercício ao seu treino.");
-    }
+    if (error) throw new Error(error.message);
   },
 
   updateWorkoutExercise: async (id: string, updates: Partial<WorkoutExercise>) => {
@@ -177,7 +158,6 @@ export const api = {
        weight: updates.weight,
        notes: updates.notes
     }).eq('id', id).eq('user_id', user.id);
-    
     if (error) throw new Error(error.message);
   },
 
@@ -189,9 +169,7 @@ export const api = {
 
   logHistory: async (log: Omit<HistoryLog, 'id'>) => {
     const user = await api.getUser();
-    // Garante que o exercício existe no banco de dados para não quebrar a Foreign Key do histórico
     await api.ensureExerciseExists(log.exerciseId);
-    
     const { error } = await supabase.from('history_logs').insert({
       user_id: user.id,
       exercise_id: String(log.exerciseId),
@@ -206,19 +184,19 @@ export const api = {
   getHistory: async (): Promise<HistoryLog[]> => {
     try {
       const user = await api.getUser();
+      // CORREÇÃO: Usando 'exercises(nome)' em vez de 'exercises:exercise_id (nome)'
       const { data, error } = await supabase
         .from('history_logs')
-        .select(`*, exercises:exercise_id (name)`)
+        .select(`*, exercises (nome)`)
         .eq('user_id', user.id)
         .order('date', { ascending: true });
       
       if (error) throw new Error(error.message);
-      
       return (data || []).map((row: any) => ({
         id: row.id,
         date: row.date,
         exerciseId: row.exercise_id,
-        exerciseName: row.exercises?.name || 'Desconhecido',
+        exerciseName: row.exercises?.nome || 'Desconhecido',
         weight: row.weight,
         reps: row.reps,
         sets: row.sets
@@ -233,13 +211,7 @@ export const api = {
     try {
       const user = await api.getUser();
       const today = new Date().toISOString().split('T')[0];
-      const { data } = await supabase
-        .from('completion_logs')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('date', today)
-        .single();
-      
+      const { data } = await supabase.from('completion_logs').select('id').eq('user_id', user.id).eq('date', today).maybeSingle();
       if (!data) {
         await supabase.from('completion_logs').insert({ user_id: user.id, date: today });
       }
@@ -251,11 +223,7 @@ export const api = {
   getCompletions: async (): Promise<CompletionLog[]> => {
     try {
       const user = await api.getUser();
-      const { data, error } = await supabase
-        .from('completion_logs')
-        .select('date')
-        .eq('user_id', user.id);
-      
+      const { data, error } = await supabase.from('completion_logs').select('date').eq('user_id', user.id);
       if (error) throw new Error(error.message);
       return data || [];
     } catch (err: any) {
