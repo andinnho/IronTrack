@@ -5,12 +5,12 @@ import { INITIAL_WEEK_SCHEDULE, INITIAL_EXERCISES, getImg } from '../constants';
 // Mapeamento de grupo muscular (Banco -> Frontend)
 const mapMuscleGroup = (group: string): MuscleGroup => {
   const g = group?.toLowerCase();
-  if (g === 'peito') return 'chest';
-  if (g === 'costas') return 'back';
-  if (g === 'ombro') return 'shoulders';
-  if (g === 'biceps' || g === 'triceps') return 'arms';
-  if (g === 'pernas' || g === 'panturrilha') return 'legs';
-  if (g === 'abdomen') return 'core';
+  if (g === 'chest' || g === 'peito') return 'chest';
+  if (g === 'back' || g === 'costas') return 'back';
+  if (g === 'shoulders' || g === 'ombro') return 'shoulders';
+  if (g === 'arms' || g === 'biceps' || g === 'triceps') return 'arms';
+  if (g === 'legs' || g === 'pernas' || g === 'panturrilha') return 'legs';
+  if (g === 'core' || g === 'abdomen') return 'core';
   if (g === 'cardio') return 'cardio';
   return 'other';
 };
@@ -19,9 +19,9 @@ const mapExerciseFromDB = (data: any): ExerciseDefinition => ({
   id: String(data.id),
   name: data.nome || 'Sem nome',
   slug: data.slug || (data.nome ? data.nome.toLowerCase().replace(/\s+/g, '-') : 'sem-slug'),
-  target: mapMuscleGroup(data.grupo_muscular), 
+  target: mapMuscleGroup(data.muscle_group || data.grupo_muscular), 
   targetMuscle: '', 
-  equipment: data.equipamento || '',
+  equipment: data.equipment || data.equipamento || '',
   level: 'beginner',
   // Prioritize imagem_url from DB, fallback to getImg placeholder
   imageUrl: data.imagem_url || getImg(data.nome || 'Ex'),
@@ -44,18 +44,28 @@ export const api = {
           id: def.id,
           nome: def.name,
           slug: def.slug,
-          grupo_muscular: def.target === 'chest' ? 'peito' : 
-                         def.target === 'back' ? 'costas' : 
-                         def.target === 'shoulders' ? 'ombro' : 
-                         def.target === 'arms' ? 'biceps' : 
-                         def.target === 'legs' ? 'pernas' : 
-                         def.target === 'cardio' ? 'cardio' : 'abdomen',
-          equipamento: def.equipment,
-          imagem_prompt: `ilustração de ${def.name}`
+          muscle_group: def.target,
+          equipment: def.equipment,
+          imagem_prompt: `ilustração realista de ${def.name}`
         });
       } else {
-        throw new Error(`Exercício ${exerciseId} não encontrado na base de dados nem na configuração local.`);
+        throw new Error(`Exercício ${exerciseId} não encontrado.`);
       }
+    }
+  },
+
+  seedExercises: async () => {
+    const { data } = await supabase.from('exercises').select('id').limit(1);
+    if (!data || data.length === 0) {
+      const inserts = INITIAL_EXERCISES.map(ex => ({
+        id: ex.id,
+        nome: ex.name,
+        slug: ex.slug,
+        muscle_group: ex.target,
+        equipment: ex.equipment,
+        imagem_prompt: `ilustração realista de ${ex.name}`
+      }));
+      await supabase.from('exercises').insert(inserts);
     }
   },
 
@@ -67,7 +77,10 @@ export const api = {
         .order('nome');
       
       if (error) throw error;
-      if (!data || data.length === 0) return INITIAL_EXERCISES;
+      if (!data || data.length === 0) {
+        await api.seedExercises();
+        return INITIAL_EXERCISES;
+      }
       
       return data.map(mapExerciseFromDB);
     } catch (err) {
@@ -119,7 +132,7 @@ export const api = {
               id: item.id,
               exerciseId: item.exercise_id,
               name: ex?.nome || item.name || 'Exercício',
-              target: mapMuscleGroup(ex?.grupo_muscular),
+              target: mapMuscleGroup(ex?.muscle_group || ex?.grupo_muscular),
               imageUrl: ex?.imagem_url || getImg(ex?.nome || 'Ex'),
               sets: item.sets || 3,
               reps: item.reps || 10,
