@@ -33,13 +33,10 @@ export const api = {
     return user;
   },
 
-  // Garante que o exercício exista no banco antes de ser referenciado em outras tabelas
   ensureExerciseExists: async (exerciseId: string) => {
-    // Primeiro verifica se o ID é um UUID válido (ou se existe no banco)
     const { data, error } = await supabase.from('exercises').select('id').eq('id', exerciseId).maybeSingle();
     
     if (!data) {
-      // Se não estiver no banco, tenta buscar na lista local sincronizada
       const def = INITIAL_EXERCISES.find(ex => ex.id === exerciseId);
       if (def) {
         await supabase.from('exercises').insert({
@@ -50,7 +47,8 @@ export const api = {
                          def.target === 'back' ? 'costas' : 
                          def.target === 'shoulders' ? 'ombro' : 
                          def.target === 'arms' ? 'biceps' : 
-                         def.target === 'legs' ? 'pernas' : 'abdomen',
+                         def.target === 'legs' ? 'pernas' : 
+                         def.target === 'cardio' ? 'cardio' : 'abdomen',
           equipamento: def.equipment,
           imagem_prompt: `ilustração de ${def.name}`
         });
