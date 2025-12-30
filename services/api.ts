@@ -23,7 +23,8 @@ const mapExerciseFromDB = (data: any): ExerciseDefinition => ({
   targetMuscle: '', 
   equipment: data.equipamento || '',
   level: 'beginner',
-  imageUrl: `https://placehold.co/200x200/1e293b/0ea5e9?text=${encodeURIComponent(data.nome || 'Ex')}`,
+  // Prioritize imagem_url from DB, fallback to placeholder
+  imageUrl: data.imagem_url || `https://placehold.co/200x200/1e293b/0ea5e9?text=${encodeURIComponent(data.nome || 'Ex')}`,
 });
 
 export const api = {
@@ -75,6 +76,20 @@ export const api = {
     }
   },
 
+  getRawExercises: async () => {
+    const { data, error } = await supabase.from('exercises').select('*');
+    if (error) throw error;
+    return data;
+  },
+
+  updateExerciseImage: async (id: string, imageUrl: string) => {
+    const { error } = await supabase
+      .from('exercises')
+      .update({ imagem_url: imageUrl })
+      .eq('id', id);
+    if (error) throw error;
+  },
+
   getSchedule: async (): Promise<WeekDayWorkout[]> => {
     try {
       const user = await api.getUser();
@@ -105,7 +120,7 @@ export const api = {
               exerciseId: item.exercise_id,
               name: ex?.nome || item.name || 'Exercício',
               target: mapMuscleGroup(ex?.grupo_muscular),
-              imageUrl: `https://placehold.co/200x200/1e293b/0ea5e9?text=${encodeURIComponent(ex?.nome || 'Ex')}`,
+              imageUrl: ex?.imagem_url || `https://placehold.co/200x200/1e293b/0ea5e9?text=${encodeURIComponent(ex?.nome || 'Ex')}`,
               sets: item.sets || 3,
               reps: item.reps || 10,
               weight: item.weight || 0,
@@ -182,7 +197,7 @@ export const api = {
       const user = await api.getUser();
       const { data, error } = await supabase
         .from('history_logs')
-        .select(`*, exercises (nome)`)
+        .select(`*, exercises (nome, imagem_url)`)
         .eq('user_id', user.id)
         .order('date', { ascending: true });
       
