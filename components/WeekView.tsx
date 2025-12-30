@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, Calendar, Loader2 } from 'lucide-react';
+import { ChevronRight, Calendar, Loader2, Dumbbell, Zap, Circle } from 'lucide-react';
 import { WeekDayWorkout } from '../types';
 import { api } from '../services/api';
 
@@ -23,89 +23,140 @@ const WeekView: React.FC = () => {
     load();
   }, []);
 
-  const today = new Date().toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+  const todayStr = new Date().toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
   
   const isToday = (dayId: string) => {
     const map: Record<string, string> = {
       'monday': 'monday', 'tuesday': 'tuesday', 'wednesday': 'wednesday',
       'thursday': 'thursday', 'friday': 'friday', 'saturday': 'saturday', 'sunday': 'sunday'
     };
-    return map[today] === dayId;
+    return map[todayStr] === dayId;
   };
 
   if (loading) {
     return (
-      <div className="flex justify-center py-10">
-        <Loader2 className="w-8 h-8 text-brand-500 animate-spin" />
+      <div className="flex flex-col items-center justify-center py-20 gap-4">
+        <Loader2 className="w-10 h-10 text-brand-500 animate-spin" />
+        <p className="text-slate-500 font-medium animate-pulse">Sincronizando sua rotina...</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-white">Treinos da Semana</h2>
-          <p className="text-slate-400 text-sm">Organize sua rotina e mantenha o foco</p>
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      {/* Header Section */}
+      <div className="flex items-end justify-between px-1">
+        <div className="space-y-1">
+          <h2 className="text-3xl font-extrabold text-white tracking-tight">
+            Treinos da Semana
+          </h2>
+          <p className="text-slate-400 text-sm font-medium">
+            Mantenha a disciplina. Um dia de cada vez.
+          </p>
         </div>
-        <div className="bg-brand-500/10 p-2 rounded-lg">
-          <Calendar className="w-6 h-6 text-brand-500" />
+        <div className="hidden sm:flex bg-slate-800/50 backdrop-blur-sm border border-white/5 p-3 rounded-2xl shadow-xl">
+          <Calendar className="w-5 h-5 text-brand-500" />
         </div>
       </div>
 
-      <div className="grid gap-4">
+      {/* Cards List */}
+      <div className="grid gap-5">
         {schedule.map((day) => {
           const active = isToday(day.dayId);
+          const hasExercises = day.exercises.length > 0;
+          
           return (
             <div
               key={day.dayId}
               onClick={() => navigate(`/workout/${day.dayId}`)}
-              className={`relative overflow-hidden rounded-xl p-0.5 transition-all cursor-pointer group ${
+              className={`group relative flex flex-col rounded-[24px] transition-all duration-300 cursor-pointer active:scale-[0.98] ${
                 active 
-                  ? 'bg-gradient-to-r from-brand-500 to-indigo-600 shadow-lg shadow-brand-500/20' 
-                  : 'bg-dark-800 hover:bg-slate-700'
+                  ? 'bg-slate-800/80 ring-2 ring-brand-500/40 shadow-[0_20px_40px_-15px_rgba(14,165,233,0.15)]' 
+                  : 'bg-slate-800/30 hover:bg-slate-800/50 border border-white/5 shadow-lg'
               }`}
             >
-              <div className="bg-dark-800 h-full rounded-[10px] p-5 flex items-center justify-between relative z-10">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <span className={`text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${
-                      active ? 'bg-brand-500 text-white' : 'bg-slate-700 text-slate-300'
-                    }`}>
-                      {day.dayName}
-                    </span>
-                    {active && <span className="text-xs text-brand-400 animate-pulse font-medium">● Hoje</span>}
+              {/* Active Highlight Glow */}
+              {active && (
+                <div className="absolute -inset-1 bg-gradient-to-r from-brand-500/20 to-indigo-500/20 rounded-[26px] blur-xl -z-10 opacity-50"></div>
+              )}
+
+              <div className="p-6 flex items-center gap-5">
+                {/* Day Marker / Icon */}
+                <div className={`flex flex-col items-center justify-center w-14 h-14 rounded-2xl shrink-0 transition-colors duration-300 ${
+                  active ? 'bg-brand-500 text-white' : 'bg-slate-900 text-slate-500'
+                }`}>
+                  <span className="text-[10px] font-bold uppercase tracking-tighter leading-none mb-1 opacity-80">
+                    {day.dayName.substring(0, 3)}
+                  </span>
+                  <Dumbbell className={`w-5 h-5 ${active ? 'text-white' : 'text-slate-400 opacity-40'}`} />
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    {active && (
+                      <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-brand-500/10 text-brand-400 text-[10px] font-bold uppercase tracking-wider">
+                        <Zap className="w-3 h-3 fill-brand-400" />
+                        Hoje
+                      </span>
+                    )}
+                    {!hasExercises && !active && (
+                      <span className="px-2 py-0.5 rounded-full bg-slate-900/50 text-slate-500 text-[10px] font-bold uppercase tracking-wider">
+                        Vazio
+                      </span>
+                    )}
                   </div>
                   
-                  <h3 className="text-lg font-bold text-white mb-2 group-hover:text-brand-400 transition-colors">
+                  <h3 className={`text-xl font-bold tracking-tight transition-colors truncate ${
+                    active ? 'text-white' : 'text-slate-200 group-hover:text-white'
+                  }`}>
                     {day.title}
                   </h3>
 
-                  <div className="space-y-1">
-                    {day.exercises.slice(0, 3).map((ex, i) => (
-                      <div key={i} className="flex items-center gap-2 text-sm text-slate-400">
-                        <span className="w-1 h-1 rounded-full bg-slate-500"></span>
-                        {ex.name}
+                  {/* Exercise Preview Pill List */}
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {day.exercises.slice(0, 2).map((ex, i) => (
+                      <div key={i} className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white/5 border border-white/5">
+                        <Circle className="w-1.5 h-1.5 fill-slate-500 text-slate-500" />
+                        <span className="text-[11px] text-slate-400 font-medium truncate max-w-[80px]">
+                          {ex.name}
+                        </span>
                       </div>
                     ))}
-                    {day.exercises.length > 3 && (
-                      <div className="text-xs text-slate-500 pl-3">
-                        + {day.exercises.length - 3} exercícios
+                    {day.exercises.length > 2 && (
+                      <div className="px-2 py-1 rounded-lg bg-white/5 border border-white/5 text-[11px] text-brand-400 font-bold">
+                        +{day.exercises.length - 2}
                       </div>
                     )}
                     {day.exercises.length === 0 && (
-                      <div className="text-xs text-slate-600 italic">Toque para adicionar exercícios</div>
+                      <p className="text-xs text-slate-500 font-medium italic group-hover:text-slate-400 transition-colors">
+                        Planeje seu treino agora
+                      </p>
                     )}
                   </div>
                 </div>
 
-                <ChevronRight className={`w-5 h-5 transition-transform group-hover:translate-x-1 ${
-                  active ? 'text-brand-500' : 'text-slate-600'
-                }`} />
+                {/* Arrow */}
+                <div className={`p-2 rounded-full transition-all duration-300 ${
+                  active ? 'bg-brand-500 text-white' : 'bg-white/5 text-slate-600 group-hover:bg-brand-500/10 group-hover:text-brand-400'
+                }`}>
+                  <ChevronRight className="w-5 h-5" />
+                </div>
               </div>
+
+              {/* Progress Bar (Bottom Line Decoration) */}
+              {active && hasExercises && (
+                <div className="absolute bottom-0 left-6 right-6 h-0.5 bg-gradient-to-r from-brand-500 to-indigo-500 rounded-full opacity-60"></div>
+              )}
             </div>
           );
         })}
+      </div>
+
+      {/* Footer Motivation */}
+      <div className="text-center py-6 px-4">
+        <p className="text-slate-600 text-xs font-medium uppercase tracking-[0.2em]">
+          Feito para quem não aceita desculpas
+        </p>
       </div>
     </div>
   );
