@@ -29,8 +29,10 @@ const mapExerciseFromDB = (data: any): ExerciseDefinition => ({
 
 export const api = {
   getUser: async () => {
-    const { data: { user }, error } = await supabase.auth.getUser();
-    if (error || !user) throw new Error('Usuário não autenticado');
+    const { data: { session }, error } = await supabase.auth.getSession();
+    if (error) throw error;
+    const user = session?.user;
+    if (!user) throw new Error('Usuário não autenticado ou sessão expirada');
     return user;
   },
 
