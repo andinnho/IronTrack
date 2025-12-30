@@ -2,7 +2,7 @@ import { supabase } from '../lib/supabase';
 import { ExerciseDefinition, WeekDayWorkout, WorkoutExercise, HistoryLog, CompletionLog, MuscleGroup } from '../types';
 import { INITIAL_WEEK_SCHEDULE, INITIAL_EXERCISES } from '../constants';
 
-// Função para converter o grupo muscular do banco (PT) para o ID interno (EN)
+// Mapeamento de grupo muscular (Banco -> Frontend)
 const mapMuscleGroup = (group: string): MuscleGroup => {
   const g = group?.toLowerCase();
   if (g === 'peito') return 'chest';
@@ -11,6 +11,7 @@ const mapMuscleGroup = (group: string): MuscleGroup => {
   if (g === 'biceps' || g === 'triceps') return 'arms';
   if (g === 'pernas' || g === 'panturrilha') return 'legs';
   if (g === 'abdomen') return 'core';
+  if (g === 'cardio') return 'cardio';
   return 'other';
 };
 
@@ -32,14 +33,16 @@ export const api = {
     return user;
   },
 
+  // Garante que o exercício exista no banco antes de ser referenciado em outras tabelas
   ensureExerciseExists: async (exerciseId: string) => {
-    const { data, error: fetchError } = await supabase.from('exercises').select('id').eq('id', exerciseId).maybeSingle();
-    if (fetchError) console.warn("Erro ao verificar exercício:", fetchError.message);
-
+    // Primeiro verifica se o ID é um UUID válido (ou se existe no banco)
+    const { data, error } = await supabase.from('exercises').select('id').eq('id', exerciseId).maybeSingle();
+    
     if (!data) {
+      // Se não estiver no banco, tenta buscar na lista local sincronizada
       const def = INITIAL_EXERCISES.find(ex => ex.id === exerciseId);
       if (def) {
-        const { error: insertError } = await supabase.from('exercises').insert({
+        await supabase.from('exercises').insert({
           id: def.id,
           nome: def.name,
           slug: def.slug,
@@ -51,10 +54,8 @@ export const api = {
           equipamento: def.equipment,
           imagem_prompt: `ilustração de ${def.name}`
         });
-        
-        if (insertError) {
-          throw new Error(`Erro ao cadastrar ${def.name}: ${insertError.message}`);
-        }
+      } else {
+        throw new Error(`Exercício ${exerciseId} não encontrado na base de dados nem na configuração local.`);
       }
     }
   },
@@ -67,10 +68,7 @@ export const api = {
         .order('nome');
       
       if (error) throw error;
-
-      if (!data || data.length === 0) {
-        return INITIAL_EXERCISES;
-      }
+      if (!data || data.length === 0) return INITIAL_EXERCISES;
       
       return data.map(mapExerciseFromDB);
     } catch (err) {
@@ -87,7 +85,6 @@ export const api = {
         .select('day_id, title')
         .eq('user_id', user.id);
 
-      // CORREÇÃO: Usando 'exercises(*)' em vez de 'exercises:exercise_id (*)'
       const { data: items, error: itemsError } = await supabase
         .from('workout_items')
         .select(`*, exercises (*)`)
@@ -108,7 +105,7 @@ export const api = {
              return {
               id: item.id,
               exerciseId: item.exercise_id,
-              name: ex?.nome || item.name || 'Exercício Local',
+              name: ex?.nome || item.name || 'Exercício',
               target: mapMuscleGroup(ex?.grupo_muscular),
               imageUrl: `https://placehold.co/200x200/1e293b/0ea5e9?text=${encodeURIComponent(ex?.nome || 'Ex')}`,
               sets: item.sets || 3,
@@ -138,10 +135,11 @@ export const api = {
   addWorkoutExercise: async (dayId: string, exercise: Omit<WorkoutExercise, 'id'>) => {
     const user = await api.getUser();
     await api.ensureExerciseExists(exercise.exerciseId);
+    
     const { error } = await supabase.from('workout_items').insert({
       user_id: user.id,
       day_id: dayId,
-      exercise_id: String(exercise.exerciseId),
+      exercise_id: exercise.exerciseId,
       sets: exercise.sets,
       reps: exercise.reps,
       weight: exercise.weight,
@@ -172,7 +170,7 @@ export const api = {
     await api.ensureExerciseExists(log.exerciseId);
     const { error } = await supabase.from('history_logs').insert({
       user_id: user.id,
-      exercise_id: String(log.exerciseId),
+      exercise_id: log.exerciseId,
       weight: log.weight,
       reps: log.reps,
       sets: log.sets,
@@ -184,7 +182,6 @@ export const api = {
   getHistory: async (): Promise<HistoryLog[]> => {
     try {
       const user = await api.getUser();
-      // CORREÇÃO: Usando 'exercises(nome)' em vez de 'exercises:exercise_id (nome)'
       const { data, error } = await supabase
         .from('history_logs')
         .select(`*, exercises (nome)`)
