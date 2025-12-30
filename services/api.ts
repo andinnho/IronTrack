@@ -1,6 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { ExerciseDefinition, WeekDayWorkout, WorkoutExercise, HistoryLog, CompletionLog, MuscleGroup } from '../types';
-import { INITIAL_WEEK_SCHEDULE, INITIAL_EXERCISES } from '../constants';
+import { INITIAL_WEEK_SCHEDULE, INITIAL_EXERCISES, getImg } from '../constants';
 
 // Mapeamento de grupo muscular (Banco -> Frontend)
 const mapMuscleGroup = (group: string): MuscleGroup => {
@@ -23,8 +23,8 @@ const mapExerciseFromDB = (data: any): ExerciseDefinition => ({
   targetMuscle: '', 
   equipment: data.equipamento || '',
   level: 'beginner',
-  // Prioritize imagem_url from DB, fallback to placeholder
-  imageUrl: data.imagem_url || `https://placehold.co/200x200/1e293b/0ea5e9?text=${encodeURIComponent(data.nome || 'Ex')}`,
+  // Prioritize imagem_url from DB, fallback to getImg placeholder
+  imageUrl: data.imagem_url || getImg(data.nome || 'Ex'),
 });
 
 export const api = {
@@ -120,7 +120,7 @@ export const api = {
               exerciseId: item.exercise_id,
               name: ex?.nome || item.name || 'Exercício',
               target: mapMuscleGroup(ex?.grupo_muscular),
-              imageUrl: ex?.imagem_url || `https://placehold.co/200x200/1e293b/0ea5e9?text=${encodeURIComponent(ex?.nome || 'Ex')}`,
+              imageUrl: ex?.imagem_url || getImg(ex?.nome || 'Ex'),
               sets: item.sets || 3,
               reps: item.reps || 10,
               weight: item.weight || 0,

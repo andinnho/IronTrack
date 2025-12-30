@@ -1,7 +1,6 @@
-
 import { ExerciseDefinition, WeekDayWorkout } from './types';
 
-const getImg = (text: string) => `https://placehold.co/200x200/1e293b/0ea5e9?text=${encodeURIComponent(text)}`;
+export const getImg = (text: string) => `https://placehold.co/200x200/1e293b/0ea5e9?text=${encodeURIComponent(text)}`;
 
 export const INITIAL_EXERCISES: ExerciseDefinition[] = [
   // PEITO
@@ -35,7 +34,7 @@ export const INITIAL_EXERCISES: ExerciseDefinition[] = [
   { id: 'a28e9a96-31e4-44ea-b0b1-9cc2bc67873e', name: 'Abdominal Reto', slug: 'abdominal-reto', target: 'core', equipment: 'peso corporal', imageUrl: getImg('Abs Reto') },
   { id: '1e4e220d-13eb-4f1b-b6f9-d73e78d2773c', name: 'Prancha', slug: 'prancha', target: 'core', equipment: 'peso corporal', imageUrl: getImg('Prancha') },
 
-  // CARDIO (Novos exercícios solicitados)
+  // CARDIO
   { id: '54bbb198-943b-48bf-8108-3a04841d80bc', name: 'Esteira – Caminhada', slug: 'esteira-caminhada', target: 'cardio', equipment: 'máquina', imageUrl: getImg('Esteira Caminhada') },
   { id: 'caac99c3-f7d4-473f-b541-e9c69c40d2bf', name: 'Esteira – Corrida', slug: 'esteira-corrida', target: 'cardio', equipment: 'máquina', imageUrl: getImg('Esteira Corrida') },
   { id: 'f48d9a22-1d12-4e92-a8c1-90a6f8b1c1e1', name: 'Esteira – Corrida Inclinada', slug: 'esteira-corrida-inclinada', target: 'cardio', equipment: 'máquina', imageUrl: getImg('Corrida Inclinada') },
@@ -52,7 +51,6 @@ export const INITIAL_WEEK_SCHEDULE: WeekDayWorkout[] = [
   { dayId: 'monday', dayName: 'Segunda', title: 'Peito e Tríceps', exercises: [] },
   { dayId: 'tuesday', dayName: 'Terça', title: 'Costas e Bíceps', exercises: [] },
   { dayId: 'wednesday', dayName: 'Quarta', title: 'Descanso / Cardio', exercises: [] },
-  /* Fix: Removed extra 'id' property from the Thursday entry to comply with WeekDayWorkout interface */
   { dayId: 'thursday', dayName: 'Quinta', title: 'Pernas Completo', exercises: [] },
   { dayId: 'friday', dayName: 'Sexta', title: 'Ombros e Trapézio', exercises: [] },
   { dayId: 'saturday', dayName: 'Sábado', title: 'Core / Cardio', exercises: [] },
