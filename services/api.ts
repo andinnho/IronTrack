@@ -30,9 +30,19 @@ const mapExerciseFromDB = (data: any): ExerciseDefinition => ({
 export const api = {
   getUser: async () => {
     const { data: { session }, error } = await supabase.auth.getSession();
-    if (error) throw error;
+    
+    if (error) {
+      // If the session error is related to refresh tokens, the best course of action
+      // is usually to treat it as "no user" so the UI redirects to login.
+      if (error.message.includes('refresh_token')) {
+        await supabase.auth.signOut();
+        throw new Error('Sessão expirada. Por favor, faça login novamente.');
+      }
+      throw error;
+    }
+
     const user = session?.user;
-    if (!user) throw new Error('Usuário não autenticado ou sessão expirada');
+    if (!user) throw new Error('Usuário não autenticado');
     return user;
   },
 
@@ -146,6 +156,7 @@ export const api = {
       });
     } catch (error: any) {
       console.error('Erro ao carregar agenda:', error.message);
+      // Return initial schedule if not authenticated to prevent empty screen
       return INITIAL_WEEK_SCHEDULE;
     }
   },

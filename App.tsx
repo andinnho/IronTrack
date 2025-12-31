@@ -5,6 +5,7 @@ import Layout from './components/Layout';
 import WeekView from './components/WeekView';
 import WorkoutDetail from './components/WorkoutDetail';
 import ProgressView from './components/ProgressView';
+import CoachView from './components/CoachView';
 import Auth from './components/Auth';
 import { Loader2 } from 'lucide-react';
 
@@ -30,6 +31,7 @@ const ProtectedApp: React.FC = () => {
           <Route path="/" element={<WeekView />} />
           <Route path="/workout/:dayId" element={<WorkoutDetail />} />
           <Route path="/progress" element={<ProgressView />} />
+          <Route path="/coach" element={<CoachView />} />
         </Routes>
       </Layout>
     </HashRouter>

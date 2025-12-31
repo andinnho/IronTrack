@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { Dumbbell, BarChart3, CalendarDays, LogOut } from 'lucide-react';
+import { Dumbbell, BarChart3, CalendarDays, LogOut, Bot } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 interface LayoutProps {
@@ -14,6 +14,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const getPageTitle = () => {
     if (location.pathname === '/') return 'Meus Treinos';
     if (location.pathname === '/progress') return 'Evolução';
+    if (location.pathname === '/coach') return 'IronCoach IA';
     if (location.pathname.startsWith('/workout/')) return 'Detalhes do Treino';
     return 'IronTrack';
   };
@@ -48,6 +49,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             </div>
             <DesktopNavItem to="/" icon={<CalendarDays />} label="Treinos" />
             <DesktopNavItem to="/progress" icon={<BarChart3 />} label="Progresso" />
+            <DesktopNavItem to="/coach" icon={<Bot />} label="Coach IA" />
         </div>
         
         <button 
@@ -63,6 +65,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-dark-800 border-t border-white/10 px-6 py-3 z-50 flex justify-around items-center safe-area-pb">
         <MobileNavItem to="/" icon={<CalendarDays />} label="Treinos" />
         <MobileNavItem to="/progress" icon={<BarChart3 />} label="Progresso" />
+        <MobileNavItem to="/coach" icon={<Bot />} label="Coach" />
       </nav>
     </div>
   );

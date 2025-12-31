@@ -22,25 +22,59 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
+    // Initial session check
+    const initAuth = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error("Auth initialization error:", error.message);
+          // Handle specific refresh token errors by clearing local storage/state
+          if (error.message.includes('refresh_token_not_found') || error.message.includes('Refresh Token Not Found')) {
+            await supabase.auth.signOut();
+            setSession(null);
+            setUser(null);
+          }
+        } else {
+          setSession(session);
+          setUser(session?.user ?? null);
+        }
+      } catch (err) {
+        console.error("Unexpected auth error:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initAuth();
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      // console.log("Auth State Change:", event, session?.user?.email);
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
+      
+      // If signed out, ensure we are really clean
+      if (event === 'SIGNED_OUT') {
+        setSession(null);
+        setUser(null);
+      }
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.error("Error signing out:", err);
+    } finally {
+      setSession(null);
+      setUser(null);
+    }
   };
 
   return (
